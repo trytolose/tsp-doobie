@@ -1,10 +1,13 @@
 import com.dimafeng.testcontainers.PostgreSQLContainer
+import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.fragment.Fragment
 import doobie.util.transactor.Transactor
 import doobie.util.update.Update
 import doobie.util.Write
 import fs2.Stream
+import zio.blocking.Blocking
+import zio.clock.Clock
 import zio.console._
 import zio.{Task, _}
 
@@ -15,22 +18,51 @@ object Main extends App {
   val tableColumns: List[String] = List("id", "name")
   val millionUsers: List[User] = (1 to 1000000).toList.map(User(_, "Vasya"))
 
+  type AppEnvironment = Clock with Database
+
+  type AppTask[A] = TaskR[AppEnvironment, A]
 
 
-  val program: ZIO[Console, Throwable, Unit] = for {
-    container   <- ZIO(PostgreSQLContainer())
-    _           <- IO.effectTotal(container.start())
-    xa          =  DatabaseInterface.getTransactor(container)
-    dbInterface =  DatabaseInterface(xa)
-    _           <- dbInterface.createTable(tableName, tableValues)
-    _           <- dbInterface.insertMany(tableName, tableColumns, millionUsers)
 
-    queue       <- dbInterface.getQueue(50)
-    queueData   <- queue.takeAll
-    _           <- putStrLn(queueData.mkString)
+//  val program: ZIO[Console, Throwable, Unit] = for {
+//    container   <- ZIO(PostgreSQLContainer())
+//    _           <- IO.effectTotal(container.start())
+//    xa          =  DatabaseInterface.getTransactor(container)
+//    dbInterface =  DatabaseInterface(xa)
+//    _           <- dbInterface.createTable(tableName, tableValues)
+//    _           <- dbInterface.insertMany(tableName, tableColumns, millionUsers)
+//
+//    queue       <- dbInterface.getQueue(50)
+//    queueData   <- queue.takeAll
+//    _           <- putStrLn(queueData.mkString)
+//
+//
+//  } yield()
+
+  val program = for {
+      container   <- ZIO.effect(PostgreSQLContainer())
+      _           <- ZIO.effect(container.start())
+
+      blockingEC  <- blocking.blockingExecutor.map(_.asEC).provide(Blocking.Live)
+
+      transactorR: Managed[Throwable, HikariTransactor[Task]] = Database.mkTransactor(
+        container,
+        Platform.executor.asEC,
+        blockingEC
+      )
+      server = ZIO.runtime[AppEnvironment].flatMap { implicit rts =>
+        db.createTable *> db.create(User(13, "usr")) *> db.get(13).flatMap(user => ZIO.effect(println(user)))
+      }
+      program <- transactorR.use { transactor =>
+        server.provideSome[Environment] { _ =>
+          new Clock.Live with Database.Live {
+            override protected def tnx: doobie.Transactor[Task] = transactor
+          }
+        }
+      }
+  } yield program
 
 
-  } yield()
 
   override def run(args: List[String]): ZIO[Main.Environment, Nothing, Int] = {
     program.fold(_ => 1, _ => 0)
@@ -103,8 +135,7 @@ object DatabaseInterface {
 }
 
 
-case class User(id: Long, name: String)
-case class UserNotFound(id: Int) extends Exception
+
 
 
 

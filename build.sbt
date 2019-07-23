@@ -19,12 +19,13 @@ lazy val root = (project in file("."))
       "org.typelevel" %% "cats-effect" % CatsEffVersion,
       "org.specs2"    %% "specs2-core" % Specs2Version % "test",
       "com.dimafeng" %% "testcontainers-scala" % "0.27.0",
-      "org.testcontainers" % "postgresql" % "1.11.3" % "test",
+      "org.testcontainers" % "postgresql" % "1.11.3",
       "org.testcontainers" % "clickhouse" % "1.11.3" % "test",
       "org.slf4j" % "slf4j-simple" % "1.7.21", // logger implementation"org.tpolecat" %% "doobie-core"      % "0.7.0",
       "org.postgresql" % "postgresql" % "9.4-1206-jdbc42",
       "org.tpolecat" %% "doobie-core" % "0.7.0",
       "org.tpolecat" %% "doobie-postgres" % "0.7.0",
+      "org.tpolecat" %% "doobie-hikari"    % "0.7.0",
       "dev.zio" %% "zio-interop-cats" % "1.0.0-RC8-9",
       "org.scalatest" %% "scalatest" % "3.0.8" % "test"
     )
